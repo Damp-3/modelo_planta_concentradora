@@ -4,7 +4,6 @@ import math
 import numpy as np
 from CoolProp.CoolProp import PropsSI
 from tql.propiedades import calcular_propiedades_agua
-from tql.parametros_novariables import cargar_parametros_novariables
 from scipy.integrate import quad
 
 def h_cond(Tsat, T_w, param):
@@ -135,21 +134,6 @@ def h_evap(Tsat, T_w, m_2_e_p, param,efecto:int):
     return h_evap
 
 
-def rho_prod(T,f1):
-    """Calcula la densidad del producto en función de la temperatura y el porcentaje de solidos totales.
-    
-    Parameters
-    ----------
-    T : float
-        Temperatura del producto en °C
-    f1 : float
-        Porcentaje de solidos totales
-    """
-    T_k = T+273
-    rho_agua = PropsSI('D','T',T_k,'Q',0,'water')
-    rho_prod = (1100 - rho_agua *(1-f1))/f1
-    return rho_prod
-
 def visc_suero(T,f1):
     """Calcula la viscosidad del suero de la leche en función de la temperatura y el contenido de sólidos totales
     Parameters
@@ -174,39 +158,6 @@ def visc_suero(T,f1):
     viscosidad = A*factor_temp*factor_agua
     return viscosidad*1000
 
-
-
-def cp_suero(T, f1):
-    """
-    Calcula la capacidad calorífica del suero de leche en función de:
-      - contenido de sólidos totales (f1, fracción entre 0 y 1),
-      - temperatura (T, en °C).
-    Retorna la cp en J/kg.K (o J/kg.°C, equivalentes para incrementos de T).
-    """
-
-    # Asegurarnos de convertir T a Kelvin si usamos CoolProp:
-    T_K = T + 273.15
-
-    # Ejemplo: cp del agua usando CoolProp en J/kg.K a la temperatura dada:
-    cp_agua_0 = PropsSI('C', 'T', T_K, 'Q', 0, 'Water')  # entalpía mas. en J/kg.K (para agua líquida)
-    
-    # Valores para sólidos totales, etc. (según tu modelo, aquí en un ejemplo simple)
-    cp_solid_0 = 1800    # J/kg.K (sólidos)
-    
-    # Coeficientes de ajuste por temperatura
-    k_agua = 0.001       # ejemplo de incremento por °C para agua
-    k_solid = 0.0005     # ejemplo de incremento por °C para sólidos
-    
-    # Ajustamos con T (en °C):
-    cp_agua = cp_agua_0 + k_agua * T
-    cp_solid = cp_solid_0 + k_solid * T
-
-    # Fracción de agua
-    contenido_agua = 1.0 - f1
-
-    # Mezcla ponderada
-    cp = cp_agua * contenido_agua + cp_solid * f1
-    return cp
 
 def Q_suero_integral(m_suero, T_in, T_out, f1):
     """
@@ -273,38 +224,135 @@ def h_l(T,f1):
     h_l, _ = quad(lambda T: cp_suero(T,f1),0,T)
     return h_l  
 
-#m_suero,m_hold,T_in,T_vap,A
+
 class Pastparams:
-    def __init__(self):
-        self.m_suero = np.random.uniform(19000,21000)
-        self.L = 13
-        self.e = 0.005
-        self.g = 9.81
-        self.do = 0.0508
-        self.num_tub = 2
+    """
+    Clase para encapsular parámetros y métodos físicos del pasteurizador.
+    
+    Atributos (pasados al constructor):
+    ----------------------------------
+    L        : Longitud total de los tubos (m)
+    e        : Espesor de los tubos (m)
+    g        : Aceleración gravitatoria (m/s^2)
+    do       : Diámetro externo del tubo (m)
+    num_tub  : Número de tubos
+    f1       : Fracción (0 a 1) de sólidos totales
+    """
+    def __init__(self, 
+                 L: float = 13.0, 
+                 e: float = 0.005, 
+                 g: float = 9.81, 
+                 do: float = 0.0508, 
+                 num_tub: int = 2, 
+                 f1: float = 0.115,
+                 U: float = 7000):
         
+        self.L = L
+        self.e = e
+        self.g = g
+        self.do = do
+        self.num_tub = num_tub
+        self.f1 = f1
+        self.U = U
+    
+    def m_suero(self):
+        """
+        Retorna un flujo de suero aleatorio entre 19000 y 21000 (unidades a definir).
+        
+        """
+        return np.random.uniform(19000, 21000)
 
-        def area_past(self):
-            return math.pi*self.L*self.do*self.num_tub
+    def get_area_past(self):
+        """
+        Retorna el área externa total de los tubos,
+        asumiendo do como diámetro externo, L como longitud del tubo,
+        y num_tub como cantidad de tubos.
+        A = pi * do * L * num_tub
+        """
+        return math.pi * self.L * self.do * self.num_tub
 
-        def di(self):
-            return self.do - 2 * self.e
-        def rho_prod(self,T,f1):
-            """Calcula la densidad del producto en función de la temperatura y el porcentaje de solidos totales.
-            Parameters
-            ----------
-            T : float
-                Temperatura del producto
-            f1 : float
-                Porcentaje de solidos totales
-            """
-            T_k = T+273
-            rho_agua = PropsSI('C','T',T_k,'Q',1,'water')
-            rho_prod = (1.10-rho_agua*(1-f1))/f1
-            return rho_prod
+    def get_di(self):
+        """
+        Diámetro interno: do - 2*e
+        """
+        return self.do - 2.0*self.e
+    
+    def get_rho_prod(self, T: float, f1: float):
+        """
+        Calcula la densidad del producto en función de la temperatura (°C)
+        y la fracción de sólidos totales (f1).
+        
+        Usamos CoolProp para la densidad del agua a T dada (en K),
+        y sumamos la contribución de sólidos (densidad fija 1397 kg/m3).
+        """
+        T_k = T + 273.15
+        rho_agua = PropsSI('D','T', T_k,'Q',0,'Water')  # densidad del agua líquida
+        rho_prod = rho_agua*(1 - f1) + 1397*f1
+        return rho_prod
 
+    def get_m_hold(self, T: float, f1: float):
+        """
+        Retorna la masa de producto en el interior (hold-up),
+        asumiendo un volumen cilíndrico (sección interna) * longitud,
+        multiplicado por la densidad del producto (get_rho_prod).
+        """
+        di = self.get_di()
+        area_interna = math.pi * (di**2) / 4.0  # sección transversal
+        # Ojo: en tu código pusiste math.pi * (di**2), que es el área de un círculo con radio=di. 
+        # Normalmente, area = pi*(diametro^2)/4. Ajusta si lo tuyo es otra geometría.
+        
+        rho = self.get_rho_prod(T, f1)
+        volume = area_interna * self.L
+        return volume * rho
 
+    def get_cp_suero(self, T: float, f1: float):
+        """
+        Calcula la capacidad calorífica del suero (J/kg.K), 
+        suponiendo una mezcla de agua + sólidos.
+        
+        - T (°C) => se convierte a Kelvin para usar CoolProp.
+        - f1 = fracción de sólidos (0..1).
+        
+        Se obtiene cp_agua_0 de CoolProp y se corrige levemente con un factor.
+        Se usa un cp_solid_0 aproximado para la parte sólida.
+        """
+        T_K = T + 273.15
+        # cp_agua_0 => calor específico del agua en J/kg.K
+        cp_agua_0 = PropsSI('C', 'T', T_K, 'Q', 0, 'Water')
+        
+        # supuestos para los sólidos
+        cp_solid_0 = 1800.0   # J/kg.K (sólidos)
+        
+        # "ajustes" por temperatura (ejemplo hipotético)
+        k_agua = 0.001   # J/kg.K por °C
+        k_solid = 0.0005
+        
+        cp_agua = cp_agua_0 + k_agua * T
+        cp_solid = cp_solid_0 + k_solid * T
+        
+        # Mezcla ponderada
+        contenido_agua = 1.0 - f1
+        cp_mixture = cp_agua*contenido_agua + cp_solid*f1
+        
+        return cp_mixture
 
-        def m_hold(self):
-            return math.pi
-        pass
+    def get_T_in(self):
+        """Genera una temperatura aleatoria de ingreso de producto a partir de una distribución uniforme entre 70 y 74 °C
+
+        Returns
+        -------
+        float
+            Temperatura de ingreso de producto en °C
+        """
+        return np.random.uniforme(70,74)
+    
+    def get_T_vap(self):
+        """Genera una temperatura aleatoria de ingreso de vapor a partir de una distribución uniforme entre 77 y 83 °C
+
+        Returns
+        -------
+        float
+            Temperatura de ingreso de producto en °C
+        """
+        return np.random.uniforme(77,83)
+    
