@@ -253,97 +253,97 @@ def secado(m_air,T1,T2,T3,T4):
     return m_req_sec
 
 
-def pasteurizador_ode(t,T,params):
-    """Genera la ecuación diferencial ordinaria para la temperatura de pasteurización.
+# def pasteurizador_ode(t,T,params):
+#     """Genera la ecuación diferencial ordinaria para la temperatura de pasteurización.
 
-    Parameters
-    ----------
-    t : float
-        Variable independiente (tiempo)
-    T : float
-        Vector de estado
-    params : dict
-        diccionario 
-    """
-    Tpast = T[0]
+#     Parameters
+#     ----------
+#     t : float
+#         Variable independiente (tiempo)
+#     T : float
+#         Vector de estado
+#     params : dict
+#         diccionario 
+#     """
+#     Tpast = T[0]
     
-    # Llamamos a los parámetros desde el diccionario
+#     # Llamamos a los parámetros desde el diccionario
 
-    alpha       = params["alpha"]        # fracción de condensación (0 a 1)
-    m_suero     = params["m_suero"]      # flujo de suero (kg/s)
-    cp_suero    = params["cp_suero"]     # calor específico del suero
-    m_hold      = params["m_hold"]       # masa (o volumen*densidad) de suero en el equipo
-    U           = params["U"]            # coef. global de transferencia
-    A           = params["A"]            # área de intercambio
-    T_in        = params["T_in"]         # temp. de entrada del suero
-    T_vapor     = params["T_vapor"]      # temp. del vapor
+#     alpha       = params["alpha"]        # fracción de condensación (0 a 1)
+#     m_suero     = params["m_suero"]      # flujo de suero (kg/s)
+#     cp_suero    = params["cp_suero"]     # calor específico del suero
+#     m_hold      = params["m_hold"]       # masa (o volumen*densidad) de suero en el equipo
+#     U           = params["U"]            # coef. global de transferencia
+#     A           = params["A"]            # área de intercambio
+#     T_in        = params["T_in"]         # temp. de entrada del suero
+#     T_vapor     = params["T_vapor"]      # temp. del vapor
 
-    # Cálculo de calor por vapor condensado a través de la fracción alpha
-    Q_vap = alpha*U*A*(T_vapor-Tpast)
+#     # Cálculo de calor por vapor condensado a través de la fracción alpha
+#     Q_vap = alpha*U*A*(T_vapor-Tpast)
 
-    # Flujo neto de energía por entrada y salida de suero
-    Q_suero = m_suero* cp_suero * (T_in - Tpast)
+#     # Flujo neto de energía por entrada y salida de suero
+#     Q_suero = m_suero* cp_suero * (T_in - Tpast)
 
-    # Balance de energía
-    dTpast_dt = (Q_suero+Q_vap)/ (m_hold * cp_suero)
+#     # Balance de energía
+#     dTpast_dt = (Q_suero+Q_vap)/ (m_hold * cp_suero)
 
-    return [dTpast_dt]
+#     return [dTpast_dt]
 
-def simulate_pasteurization():
-    # 1) Sorteamos valores "incógnita" según las distribuciones pedidas:
-    T_in_rand     = np.random.uniform(55, 65)   # entre 55 y 65 °C
-    T_vapor_rand  = np.random.uniform(77, 83)   # entre 77 y 83 °C
-    alpha_rand    = np.random.uniform(0, 1)     # fracción (0 a 1)
-    cp_suero_rand = cp_suero(T_in_rand,0.115)
-    m_suero_rand = np.random.uniform(19000,21000)/3600
-    # 2) Definimos los parámetros fijos (¡ajusta según tu sistema real!)
-    params = {
-        "alpha"    : 1, 
-        "m_suero"  : m_suero_rand,      # kg/s, ejemplo
-        "cp_suero" : cp_suero_rand,      # J/(kg·°C) o (J/kgK), revisa la unidad
-        "m_hold"   : 103,    # kg de suero "en el interior" (ejemplo)
-        "U"        : 8000,    # W/(m^2·°C) (?)
-        "A"        : 4.15,      # m^2 de intercambio
-        "T_in"     : T_in_rand,
-        "T_vapor"  : T_vapor_rand
-    }
+# def simulate_pasteurization():
+#     # 1) Sorteamos valores "incógnita" según las distribuciones pedidas:
+#     T_in_rand     = np.random.uniform(55, 65)   # entre 55 y 65 °C
+#     T_vapor_rand  = np.random.uniform(77, 83)   # entre 77 y 83 °C
+#     alpha_rand    = np.random.uniform(0, 1)     # fracción (0 a 1)
+#     cp_suero_rand = cp_suero(T_in_rand,0.115)
+#     m_suero_rand = np.random.uniform(19000,21000)/3600
+#     # 2) Definimos los parámetros fijos (¡ajusta según tu sistema real!)
+#     params = {
+#         "alpha"    : 1, 
+#         "m_suero"  : m_suero_rand,      # kg/s, ejemplo
+#         "cp_suero" : cp_suero_rand,      # J/(kg·°C) o (J/kgK), revisa la unidad
+#         "m_hold"   : 103,    # kg de suero "en el interior" (ejemplo)
+#         "U"        : 8000,    # W/(m^2·°C) (?)
+#         "A"        : 4.15,      # m^2 de intercambio
+#         "T_in"     : T_in_rand,
+#         "T_vapor"  : T_vapor_rand
+#     }
     
-    # 3) Condición inicial (ejemplo: al inicio todo el pasteurizador está a T_in)
-    T0 = [params["T_in"]]
+#     # 3) Condición inicial (ejemplo: al inicio todo el pasteurizador está a T_in)
+#     T0 = [params["T_in"]]
     
-    # 4) Rango de integración en tiempo (segundos, por ejemplo)
-    t_span = (0, 2000)  # 0 a 2000 s
+#     # 4) Rango de integración en tiempo (segundos, por ejemplo)
+#     t_span = (0, 2000)  # 0 a 2000 s
     
-    # 5) Resolvemos la EDO con solve_ivp
-    sol = solve_ivp(
-        fun=pasteurizador_ode,
-        t_span=t_span,
-        y0=T0,
-        args=(params,),
-        dense_output=True
-    )
+#     # 5) Resolvemos la EDO con solve_ivp
+#     sol = solve_ivp(
+#         fun=pasteurizador_ode,
+#         t_span=t_span,
+#         y0=T0,
+#         args=(params,),
+#         dense_output=True
+#     )
     
-    # 6) Evaluamos la solución para graficar
-    t_eval = np.linspace(t_span[0], t_span[1], 300)
-    T_past = sol.sol(t_eval)[0]  # La primera (y única) ecuación
+#     # 6) Evaluamos la solución para graficar
+#     t_eval = np.linspace(t_span[0], t_span[1], 300)
+#     T_past = sol.sol(t_eval)[0]  # La primera (y única) ecuación
     
-    # 7) Mostramos en pantalla resultados básicos
-    print("=== Parámetros sorteados ===")
-    print(f"T_in       = {params['T_in']:.2f} °C")
-    print(f"T_vapor    = {params['T_vapor']:.2f} °C")
-    print(f"alpha      = {params['alpha']:.2f}")
-    print(f"m_suero    = {params['m_suero']:.2f} kg/s")
-    print(f"cp_suero    = {params['cp_suero']:.2f} j/kgK")
-    print("Solución de la EDO:", "OK" if sol.success else "FALLA")
+#     # 7) Mostramos en pantalla resultados básicos
+#     print("=== Parámetros sorteados ===")
+#     print(f"T_in       = {params['T_in']:.2f} °C")
+#     print(f"T_vapor    = {params['T_vapor']:.2f} °C")
+#     print(f"alpha      = {params['alpha']:.2f}")
+#     print(f"m_suero    = {params['m_suero']:.2f} kg/s")
+#     print(f"cp_suero    = {params['cp_suero']:.2f} j/kgK")
+#     print("Solución de la EDO:", "OK" if sol.success else "FALLA")
     
-    # 8) Graficamos la evolución de T_past en el tiempo
-    plt.figure()
-    plt.plot(t_eval, T_past, label='T_past (°C)')
-    plt.axhline(72, color='r', linestyle='--', label='72°C objetivo')
-    plt.xlabel("Tiempo (s)")
-    plt.ylabel("Temperatura (°C)")
-    plt.title("Evolución de la temperatura en la pasteurización")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-    return sol
+#     # 8) Graficamos la evolución de T_past en el tiempo
+#     plt.figure()
+#     plt.plot(t_eval, T_past, label='T_past (°C)')
+#     plt.axhline(72, color='r', linestyle='--', label='72°C objetivo')
+#     plt.xlabel("Tiempo (s)")
+#     plt.ylabel("Temperatura (°C)")
+#     plt.title("Evolución de la temperatura en la pasteurización")
+#     plt.legend()
+#     plt.grid(True)
+#     plt.show()
+#     return sol
