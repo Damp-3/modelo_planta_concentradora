@@ -19,34 +19,32 @@ def calcular_propiedades_agua(Tsat, T_w=None ):
     Calcula propiedades termodinámicas necesarias para h_cond y devuelve un diccionario.
     
     Args:
-        Tsat (float): Temperatura de saturación [K].
-        T_w (float): Temperatura de la pared [K] (opcional).
+        Tsat (float): Temperatura de saturación [°C].
+        T_w (float): Temperatura de la pared [°C] (opcional).
         
     Returns:
         dict: Diccionario con las propiedades calculadas.
     """
-    h_l = PropsSI('H', 'T', Tsat, 'Q', 0, 'water')  # [J/kg]
-    h_v = PropsSI('H', 'T', Tsat, 'Q', 1, 'water')  # [J/kg]
-    cp_l = PropsSI('C', 'T', Tsat, 'Q', 0, 'water')  # [J/kg·K]
-    h_lv = h_v - h_l  # [J/kg]
-    
-    # Corrección de entalpía si T_w está disponible
-    h_lv_corr = h_lv + 0.68 * cp_l * (Tsat - T_w) if T_w else h_lv
+    TsatK = Tsat + 273
+    TwK = T_w + 273 
+
+    h_l = PropsSI('H', 'T', TsatK, 'Q', 0, 'water')  # [J/kg]
+    h_v = PropsSI('H', 'T', TsatK, 'Q', 1, 'water')  # [J/kg]
+    cp_l = PropsSI('C', 'T', TsatK, 'Q', 0, 'water')  # [J/kg·K]
     
     return {
-        "conductividad_liquido": PropsSI('L', 'T', Tsat, 'Q', 0, 'water'),  # [W/m·K]
-        "densidad_liquido": PropsSI('D', 'T', Tsat, 'Q', 0, 'water'),       # [kg/m³]
-        "viscosidad_liquido": PropsSI('V', 'T', Tsat, 'Q', 0, 'water'),     # [Pa.s]
-        "densidad_vapor": PropsSI('D', 'T', Tsat, 'Q', 1, 'water'),         # [kg/m³]
+        "conductividad_liquido": PropsSI('L', 'T', TsatK, 'Q', 0, 'water'),  # [W/m·K]
+        "densidad_liquido": PropsSI('D', 'T', TsatK, 'Q', 0, 'water'),       # [kg/m³]
+        "viscosidad_liquido": PropsSI('V', 'T', TsatK, 'Q', 0, 'water'),     # [Pa.s]
+        "densidad_vapor": PropsSI('D', 'T', TsatK, 'Q', 1, 'water'),         # [kg/m³]
         "capacidad_calorifica_liquido": cp_l,                              # [J/kg·K]
         "entalpia_liquido": h_l,                                           # [J/kg]
         "entalpia_vapor": h_v,                                             # [J/kg]
-        "numero_prandtl_liquido": PropsSI('Prandtl', 'T', Tsat, 'Q', 0, 'water'),  # [-]
-        "entalpia_vapor_liquido": h_lv_corr,                               # [J/kg]   
-        "conductividad_vapor":PropsSI('L','T', Tsat,'Q',1,'water'),
-        "viscosidad_vapor": PropsSI('V','T',Tsat,'Q',1,'water'),
-        "capacidad_calorifica_vapor": PropsSI('C','T',Tsat,'Q',1,'water'),
-        "numero_prandtl_vapor": PropsSI('Prandtl', 'T', Tsat, 'Q', 1, 'water')   # [J/kg.K]
+        "numero_prandtl_liquido": PropsSI('Prandtl', 'T', TsatK, 'Q', 0, 'water'),  # [-]
+        "conductividad_vapor":PropsSI('L','T', TsatK,'Q',1,'water'),
+        "viscosidad_vapor": PropsSI('V','T',TsatK,'Q',1,'water'),
+        "capacidad_calorifica_vapor": PropsSI('C','T',TsatK,'Q',1,'water'),
+        "numero_prandtl_vapor": PropsSI('Prandtl', 'T', TsatK, 'Q', 1, 'water')   # [J/kg.K]
 
     }
 
