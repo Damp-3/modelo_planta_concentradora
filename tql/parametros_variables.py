@@ -256,10 +256,39 @@ class EvapEffectParams:
         self.L = 13.0                 # Longitud del tubo [m]
         self.g = 9.81                 # Aceleración gravitatoria [m/s²]
         self.do = 0.0508              # Diámetro externo del tubo [m]
+        self.di = 0.0488              # Diámetro interno del tubo [m]
         self.f = {1: 0.115, 2: 0.158, 3: 0.25, 4: 0.332}[efecto] # Fracción de sólidos totales por efecto
         self.num_tub = {1: 180, 2: 180, 3: 120, 4: 120}[efecto]  # Tubos por efecto
         self.d_evap = {1: 1.00, 2: 1.00, 3: 0.95, 4: 0.95}[efecto]  # Diámetro del evaporador
-        
+        self.cp_inox = 500                                          # Capacidad calorífica del inoxidable [J/kgK]
+        self.d_inox = 7800                                          # Densidad acero inoxidable [kg/m3]
+    
+
+    def m_inox(self):
+        """Define la masa total de un tubo
+        """
+        m_inox = ((math.pi*(self.do - self.di)**2)/4)*self.L * self.d_inox
+
+        return m_inox
+
+    def get_area_effect(self,locus:str):
+        """Retorna el área de intercambio interna o externa de los tubos.
+
+        Parameters
+        ----------
+        locus : str
+            "in" retorna el área interna o "out" retirba ek parea externa
+        efecto : int
+            n° de efecto relacionado
+        """
+
+        if locus == "in":
+            A = (math.pi*(self.di**2)/4) * self.num_tub
+        else:
+            A = (math.pi*(self.do**2)/4) * self.num_tub
+
+        return A
+    
     def ent_latent_cond(self,Ts,Tw):
         """
         Calcula el calor latente de condensación de agua a una tempratura T dada.
