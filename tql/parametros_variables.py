@@ -3,7 +3,6 @@
 import math
 import numpy as np
 from CoolProp.CoolProp import PropsSI
-from tql.propiedades import calcular_propiedades_agua
 from scipy.integrate import quad
 
 
@@ -108,6 +107,7 @@ class Pastparams:
     do       : Diámetro externo del tubo (m)
     num_tub  : Número de tubos
     f1       : Fracción (0 a 1) de sólidos totales
+    U        : Coeficiente global de transferencia de calor (W/m2/K)
     """
     def __init__(self, 
                  L: float = 13.0, 
@@ -148,7 +148,7 @@ class Pastparams:
         """
         return self.do - 2.0*self.e
     
-    def get_rho_prod(self, T: float, f1: float):
+    def get_rho_prod(self, T_K: float, f1: float):
         """
         Calcula la densidad del producto en función de la temperatura (°C)
         y la fracción de sólidos totales (f1).
@@ -156,8 +156,7 @@ class Pastparams:
         Usamos CoolProp para la densidad del agua a T dada (en K),
         y sumamos la contribución de sólidos (densidad fija 1397 kg/m3).
         """
-        T_k = T + 273.15
-        rho_agua = PropsSI('D','T', T_k,'Q',0,'Water')  # densidad del agua líquida
+        rho_agua = PropsSI('D','T', T_K,'Q',0,'Water')  # densidad del agua líquida
         rho_prod = rho_agua*(1 - f1) + 1397*f1
         return rho_prod
 
@@ -176,18 +175,17 @@ class Pastparams:
         volume = area_interna * self.L
         return volume * rho
 
-    def get_cp_suero(self, T: float, f1: float):
+    def get_cp_suero(self, T_K: float, f1: float):
         """
         Calcula la capacidad calorífica del suero (J/kg.K), 
         suponiendo una mezcla de agua + sólidos.
         
-        - T (°C) => se convierte a Kelvin para usar CoolProp.
+        - T (K) => se convierte a Kelvin para usar CoolProp.
         - f1 = fracción de sólidos (0..1).
         
         Se obtiene cp_agua_0 de CoolProp y se corrige levemente con un factor.
         Se usa un cp_solid_0 aproximado para la parte sólida.
         """
-        T_K = T + 273.15
         # cp_agua_0 => calor específico del agua en J/kg.K
         cp_agua_0 = PropsSI('C', 'T', T_K, 'Q', 0, 'Water')
         
@@ -198,8 +196,8 @@ class Pastparams:
         k_agua = 0.001   # J/kg.K por °C
         k_solid = 0.0005
         
-        cp_agua = cp_agua_0 + k_agua * T
-        cp_solid = cp_solid_0 + k_solid * T
+        cp_agua = cp_agua_0 + k_agua * T_K
+        cp_solid = cp_solid_0 + k_solid * T_K
         
         # Mezcla ponderada
         contenido_agua = 1.0 - f1
@@ -213,9 +211,9 @@ class Pastparams:
         Returns
         -------
         float
-            Temperatura de ingreso de producto en °C
+            Temperatura de ingreso de producto en K
         """
-        return np.random.uniform(70,74)
+        return np.random.uniform(343,347)
     
     def get_T_vap(self):
         """Genera una temperatura aleatoria de ingreso de vapor a partir de una distribución uniforme entre 77 y 83 °C
@@ -223,9 +221,9 @@ class Pastparams:
         Returns
         -------
         float
-            Temperatura de ingreso de producto en °C
+            Temperatura de ingreso de vapor en K
         """
-        return np.random.uniform(77,83)
+        return np.random.uniform(350,356)
     
 class EvapEffectParams:
     """
@@ -267,12 +265,12 @@ class EvapEffectParams:
     def m_inox(self):
         """Define la masa total de un tubo
         """
-        m_inox = ((math.pi*(self.do - self.di)**2)/4)*self.L * self.d_inox
+        m_inox = (math.pi*((self.do/2)**2 - (self.di/2)**2))*self.L * self.d_inox
 
         return m_inox
 
     def get_area_effect(self,locus:str):
-        """Retorna el área de intercambio interna o externa de los tubos.
+        """Retorna el área de intercambio interna o externa de los tubos en [m2].
 
         Parameters
         ----------
@@ -283,31 +281,33 @@ class EvapEffectParams:
         """
 
         if locus == "in":
-            A = (math.pi*(self.di**2)/4) * self.num_tub
+            A = math.pi*self.di * self.L
         else:
-            A = (math.pi*(self.do**2)/4) * self.num_tub
+            A = math.pi*self.do * self.L
 
         return A
     
-    def ent_latent_cond(self,Ts,Tw):
-        """
-        Calcula el calor latente de condensación de agua a una tempratura T dada.
 
-        Parameters
-        ----------
-        Ts : Temperatura de saturación del vapor en [°C]
-        Tw : Temperatura de la pared en [°C]
-        Retorna el calor específico de condensación en [J/kg].
-        """
-        T_prom = (Ts+Tw)/2 + 273
-        TsK = Ts + 273
-        TwK = Tw + 273
-        h_l = PropsSI('H','T', TsK, 'Q',0,'water') 
-        h_v = PropsSI('H','T', TsK, 'Q',1,'water')
-        cp_agua = PropsSI('C','T', T_prom, 'Q',0,'water')
-        h_l_v_corr = (h_v-h_l)+(0.68*cp_agua*(Ts-Tw)) # correlación 10-9a Cengel
-        return h_l_v_corr
-    
+
+    def ent_latent_cond(self, Ts, Tw):
+
+        Tw = np.array(Tw) # Convertir a array si no lo es
+        T_prom = (Ts + Tw) / 2
+
+        # Evaluar PropsSI solo en valores escalares
+        cp_agua = PropsSI('C','T',Ts,'Q',0,'water')
+
+        h_l = PropsSI('H', 'T', Ts, 'Q', 0, 'water')
+        h_v = PropsSI('H', 'T', Ts, 'Q', 1, 'water')
+        h_lv_corr = (h_v - h_l) + (0.68 * cp_agua * (Ts - Tw))
+
+        # Validar h_lv_corr
+        if np.isnan(h_lv_corr) or h_lv_corr <= 0:
+            print(f"Advertencia: h_lv_corr inválido ({h_lv_corr}). Ajustando...")
+            h_lv_corr = 1e3  # Valor seguro
+
+        return h_lv_corr
+
     def h_cond(self, Tsat, T_w):
         """
         Calcula el coeficiente de transferencia de calor por condensación.
@@ -315,25 +315,50 @@ class EvapEffectParams:
         Parámetros:
         -----------
         Tsat : float
-            Temperatura de saturación [°C].
+            Temperatura de saturación [K].
         T_w : float
-            Temperatura de la pared [°C].
+            Temperatura de la pared [K].
 
         Retorna:
         --------
         float
             Coeficiente de transferencia de calor por condensación [W/m²·K].
         """
-        TsatK = Tsat + 273
-        T_wK = T_w + 273
-        props = calcular_propiedades_agua(TsatK, T_wK)
-        k_l = props["conductividad_liquido"]
-        rho_l = props["densidad_liquido"]
-        visc_l = props["viscosidad_liquido"]
-        rho_v = props["densidad_vapor"]
+
+        if T_w >= Tsat:
+        # La pared está más caliente que el vapor => no hay condensación
+            return 0
+
+        k_l = PropsSI('L', 'T', Tsat, 'Q', 0, 'water')             # [W/m·K]
+        rho_l = PropsSI('D', 'T', Tsat, 'Q', 0, 'water')           # [kg/m³]
+        visc_l = PropsSI('V', 'T', Tsat, 'Q', 0, 'water')          # [Pa.s]
+        rho_v = PropsSI('D', 'T', Tsat, 'Q', 1, 'water')           # [kg/m³]
         h_lv_corr = self.ent_latent_cond(Tsat,T_w)
-        
-        h_cond = 0.943 *((rho_l * (rho_l - rho_v) * self.g * self.ent_latent_cond(Tsat,T_w) * k_l**3)/(visc_l*(Tsat-T_w)*self.L))**(1/4)
+        g = self.g
+        L = self.L
+
+        # Validar delta_T
+        delta_T = Tsat - T_w
+        if delta_T <= 0:
+            print(f"Advertencia: Tsat ({Tsat}) - T_w ({T_w}) no es válido. Ajustando...")
+            delta_T = max(delta_T, 1e-3)
+
+        # Validar h_lv_corr antes de usarlo
+        if np.isnan(h_lv_corr) or h_lv_corr <= 0:
+            print(f"Advertencia: h_lv_corr inválido ({h_lv_corr}). Ajustando...")
+            h_lv_corr = 2.26e6  # Valor seguro
+
+        # Calcular h_cond evitando valores negativos o NaN
+        try:
+            h_cond = 0.943 * ((rho_l * (rho_l - rho_v) * g * h_lv_corr * k_l**3) / (visc_l * delta_T * L))**(1/4)
+        except ValueError:
+            print("Error en el cálculo de h_cond, ajustando valores...")
+            h_cond = 10  # Valor seguro
+
+        if np.isnan(h_cond) or h_cond < 0:
+            print(f"Advertencia: h_cond inválido ({h_cond}). Ajustando a 10.")
+            h_cond = 10  # Valor seguro
+
         return h_cond
     
     def h_conv(self, Tsat, T_w, mvap):
@@ -354,16 +379,15 @@ class EvapEffectParams:
         float
             Coeficiente de transferencia de calor por convección [W/m²·K].
         """
-        props = calcular_propiedades_agua(Tsat, T_w)
-        visc_v = props["viscosidad_vapor"]
-        k_v = props["conductividad_vapor"]
-        Prl = props["numero_prandtl_vapor"]
+        visc_v = PropsSI('V','T',Tsat,'Q',1,'water')
+        k_v = PropsSI('L','T',Tsat,'Q',1,'water')
+        Prl = PropsSI('Prandtl','T',Tsat,'Q',1,'water')
         
         b = math.pi * self.d_evap  # Perímetro del tubo
         mvap1 = mvap / 3600  # Conversión de flujo de masa a kg/s
         
         Re = (4 * mvap1) / (visc_v * b)
-        Nu = 0.0214 * (Re ** 0.8 - 100) * (Prl ** 0.4)
+        Nu = 0.0214 * (Re ** 0.8) * (Prl ** 0.4)
         
         h_conv = Nu * k_v / self.L
         return h_conv
@@ -386,17 +410,19 @@ class EvapEffectParams:
         float
             Coeficiente de transferencia de calor por evaporación [W/m²·K].
         """
-        props = calcular_propiedades_agua(Tsat, T_w)
-        k_l = props["conductividad_liquido"]
-        
         T_prod = self.Pastparams.get_T_in()
         f = self.f
+        k_l = PropsSI('L','T',Tsat,'Q',0,'water')
+        visc_s = visc_suero(T_prod,f)
+        rho_s = self.Pastparams.get_rho_prod(T_prod,f)
+        g = self.g
+
 
         m_2_e_p_unit = m_2_e_p / (3600 * self.num_tub)
         
-        Re = (4 * m_2_e_p_unit) / (visc_suero(T_prod,f) * math.pi * self.Pastparams.get_di())
+        Re = (4 * m_2_e_p_unit) / (visc_s * math.pi * self.di)
         
-        h_evap = (((4 * self.Pastparams.get_rho_prod(T_prod,f)**2 * self.g * k_l**3) / (3 * visc_suero(T_prod,f)**2))**(1/3)) * Re**(-1/3)
+        h_evap = (((4 * rho_s**2 * g * k_l**3) / (3 * visc_s**2))**(1/3)) * Re**(-1/3)
         return h_evap
     
     def m_vap_1(self,x):
