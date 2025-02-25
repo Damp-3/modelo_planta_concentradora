@@ -11,24 +11,18 @@ def visc_suero(T,f1):
     Parameters
     ----------
     T : float
-        Temperatura del producto en °C
+        Temperatura del producto en K
     f1 : float   
         Contenido en porcentaje de solidos totales valor entre 0 y 1
     Returna:
     - viscosidad(float): viscosidad del suero de la leche en Pa.s
     """
-    # Parámetros ajustables del modelos
-    A = 1.1 # mPa.s a 0°C
-    B = 0.045 # Factor de disminión con la temperatura
-    C = 1.5 # Ajuste según contenido de agua
-
-    # Efecto de la temperatura 
-    factor_temp = np.exp(-B*T)
-    # Efecto del contenido de agua
-    factor_agua = f1**C
-    # Viscosidad resultante
-    viscosidad = A*factor_temp*factor_agua
-    return viscosidad*1000
+    visc_agua = PropsSI('V','T',T,'Q',0,'water')
+    m = 1
+    n = 3.5
+    K = 8
+    visc_s = visc_agua*(1 + (K*f1)**n)**m
+    return visc_s
 
 def Q_suero_integral(m_suero, T_in, T_out, f1):
     """
@@ -78,22 +72,6 @@ def Delta_h_subenf(Tsat,T):
     h_lv_sub = h_lv + (Tsat_k-T_k)*cp_l
 
     return h_lv_sub
-
-def h_l(T,f1):
-    """Calcula la entalpía del suero de leche en función de la temperatura y los sólidos totales.
-
-    Parameters
-    ----------
-    T : float
-        Temperatura actual del suero de leche en [°C]
-    f1 : float
-        Contenido de sólidos totales
-    tref : float    
-        Temperatura de referencia en [°C]
-    """
-
-    h_l, _ = quad(lambda T: cp_suero(T,f1),0,T)
-    return h_l  
 
 class Pastparams:
     """
@@ -270,12 +248,12 @@ class EvapEffectParams:
         return m_inox
 
     def get_area_effect(self,locus:str):
-        """Retorna el área de intercambio interna o externa de los tubos en [m2].
+        """Retorna el área de intercambio interna o externa de 1 tubo en [m2].
 
         Parameters
         ----------
         locus : str
-            "in" retorna el área interna o "out" retirba ek parea externa
+            "in" retorna el área interna o "out" retorna el área externa
         efecto : int
             n° de efecto relacionado
         """
@@ -304,7 +282,7 @@ class EvapEffectParams:
         # Validar h_lv_corr
         if np.isnan(h_lv_corr) or h_lv_corr <= 0:
             print(f"Advertencia: h_lv_corr inválido ({h_lv_corr}). Ajustando...")
-            h_lv_corr = 1e3  # Valor seguro
+            h_lv_corr = 2.328e6  # Valor seguro
 
         return h_lv_corr
 
@@ -328,12 +306,13 @@ class EvapEffectParams:
         if T_w >= Tsat:
         # La pared está más caliente que el vapor => no hay condensación
             return 0
-
-        k_l = PropsSI('L', 'T', Tsat, 'Q', 0, 'water')             # [W/m·K]
-        rho_l = PropsSI('D', 'T', Tsat, 'Q', 0, 'water')           # [kg/m³]
-        visc_l = PropsSI('V', 'T', Tsat, 'Q', 0, 'water')          # [Pa.s]
-        rho_v = PropsSI('D', 'T', Tsat, 'Q', 1, 'water')           # [kg/m³]
+        Temp_pel = (Tsat + T_w)/2
+        k_l = PropsSI('L', 'T', Temp_pel, 'Q', 0, 'water')             # [W/m·K]
+        rho_l = PropsSI('D', 'T', Temp_pel, 'Q', 0, 'water')           # [kg/m³]
+        visc_l = PropsSI('V', 'T', Temp_pel, 'Q', 0, 'water')          # [Pa.s]
+        rho_v = PropsSI('D', 'T', Temp_pel, 'Q', 1, 'water')           # [kg/m³]
         h_lv_corr = self.ent_latent_cond(Tsat,T_w)
+        Prl = PropsSI('Prandtl','T',Temp_pel,'Q',0,'water')
         g = self.g
         L = self.L
 
@@ -346,18 +325,18 @@ class EvapEffectParams:
         # Validar h_lv_corr antes de usarlo
         if np.isnan(h_lv_corr) or h_lv_corr <= 0:
             print(f"Advertencia: h_lv_corr inválido ({h_lv_corr}). Ajustando...")
-            h_lv_corr = 2.26e6  # Valor seguro
+            h_lv_corr = 2.3e6  # Valor seguro
 
         # Calcular h_cond evitando valores negativos o NaN
         try:
             h_cond = 0.943 * ((rho_l * (rho_l - rho_v) * g * h_lv_corr * k_l**3) / (visc_l * delta_T * L))**(1/4)
         except ValueError:
             print("Error en el cálculo de h_cond, ajustando valores...")
-            h_cond = 10  # Valor seguro
+            h_cond = 2200  # Valor seguro
 
         if np.isnan(h_cond) or h_cond < 0:
-            print(f"Advertencia: h_cond inválido ({h_cond}). Ajustando a 10.")
-            h_cond = 10  # Valor seguro
+            print(f"Advertencia: h_cond inválido ({h_cond}). Ajustando a 2200.")
+            h_cond = 2200  # Valor seguro
 
         return h_cond
     

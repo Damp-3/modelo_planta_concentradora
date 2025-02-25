@@ -64,10 +64,10 @@ def evap_ode(t, y, pastparams: Pastparams, effectparams_e1: EvapEffectParams):
     # Prevenir h_cond y h_evap inválidos
     if np.isnan(h_cond) or h_cond < 0:
         print(f"Advertencia: h_cond inválido ({h_cond}). Ajustando a 10.")
-        h_cond = 10
+        h_cond = 2200
     if np.isnan(h_evap) or h_evap < 0:
         print(f"Advertencia: h_evap inválido ({h_evap}). Ajustando a 10.")
-        h_evap = 10
+        h_evap = 2200
 
     Q_cond = h_cond * A_out * (Tvap - Tw)
     Q_evap = h_evap * A_in * (Tw - Tprod)
@@ -82,11 +82,6 @@ def evap_ode(t, y, pastparams: Pastparams, effectparams_e1: EvapEffectParams):
 
 def simular_temp_pared(T0, t_final, pastparams, effectparams_e1):
     """Simula la ecuación diferencial para el primer efecto de evaporación."""
-    # Validar temperatura inicial
-    if T0 >= pastparams.get_T_vap():
-        print(f"Advertencia: T0 ({T0}) es mayor o igual a Tvap ({pastparams.get_T_vap()}). Ajustando...")
-        T0 = pastparams.get_T_vap() - 5  # Se ajusta a un valor razonable
-    
     sol = solve_ivp(lambda t, y: evap_ode(t, y, pastparams, effectparams_e1),
                     [0, t_final], [T0], t_eval=np.linspace(0, t_final, 100))
     return sol
