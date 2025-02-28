@@ -63,10 +63,10 @@ def evap_ode(t, y, pastparams: Pastparams, effectparams_e1: EvapEffectParams):
 
     # Prevenir h_cond y h_evap inválidos
     if np.isnan(h_cond) or h_cond < 0:
-        print(f"Advertencia: h_cond inválido ({h_cond}). Ajustando a 10.")
+        print(f"Advertencia: h_cond inválido ({h_cond}). Ajustando a 2200.")
         h_cond = 2200
     if np.isnan(h_evap) or h_evap < 0:
-        print(f"Advertencia: h_evap inválido ({h_evap}). Ajustando a 10.")
+        print(f"Advertencia: h_evap inválido ({h_evap}). Ajustando a 2200.")
         h_evap = 2200
 
     Q_cond = h_cond * A_out * (Tvap - Tw)
